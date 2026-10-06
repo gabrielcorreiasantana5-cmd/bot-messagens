@@ -72,6 +72,7 @@ async def on_ready():
 
 # =========================
 # !ADD
+# ADICIONAR À LISTA FIXA
 # =========================
 
 @bot.command()
@@ -96,6 +97,7 @@ async def add(ctx, membro: discord.Member):
 
 # =========================
 # !REMOVE
+# REMOVER DA LISTA FIXA
 # =========================
 
 @bot.command()
@@ -120,6 +122,7 @@ async def remove(ctx, membro: discord.Member):
 
 # =========================
 # !LISTA
+# MOSTRAR LISTA FIXA
 # =========================
 
 @bot.command()
@@ -143,24 +146,17 @@ async def lista(ctx):
 
         try:
             usuario = await bot.fetch_user(user_id)
-
-            texto += (
-                f"{numero}. "
-                f"{usuario.name}\n"
-            )
+            texto += f"{numero}. {usuario.name}\n"
 
         except Exception:
-            texto += (
-                f"{numero}. "
-                f"ID: {user_id}\n"
-            )
+            texto += f"{numero}. ID: {user_id}\n"
 
     await ctx.send(texto)
 
 
 # =========================
 # !AVISAR
-# ENVIA PARA A LISTA
+# MANDAR PARA A LISTA FIXA
 # =========================
 
 @bot.command()
@@ -187,18 +183,13 @@ async def avisar(ctx, *, mensagem):
 
         try:
             usuario = await bot.fetch_user(user_id)
-
             await usuario.send(mensagem)
-
             enviados += 1
 
         except Exception as erro:
-
             print(
-                f"Erro ao enviar para "
-                f"{user_id}: {erro}"
+                f"Erro ao enviar para {user_id}: {erro}"
             )
-
             falharam += 1
 
     await ctx.send(
@@ -209,7 +200,7 @@ async def avisar(ctx, *, mensagem):
 
 # =========================
 # !AVISARCARGO
-# ENVIA PARA TODO O CARGO
+# MANDAR PARA UM CARGO INTEIRO
 # =========================
 
 @bot.command()
@@ -229,8 +220,7 @@ async def avisarcargo(
 
     if not membros:
         await ctx.send(
-            "⚠️ Não encontrei membros "
-            "com esse cargo."
+            "⚠️ Não encontrei membros com esse cargo."
         )
         return
 
@@ -247,16 +237,90 @@ async def avisarcargo(
 
         try:
             await membro.send(mensagem)
-
             enviados += 1
 
         except Exception as erro:
-
             print(
-                f"Erro ao enviar para "
-                f"{membro}: {erro}"
+                f"Erro ao enviar para {membro}: {erro}"
             )
+            falharam += 1
 
+    await ctx.send(
+        f"✅ Enviadas: **{enviados}**\n"
+        f"❌ Falharam: **{falharam}**"
+    )
+
+
+# =========================
+# !ENVIAR
+# MANDAR PARA PESSOAS ESPECÍFICAS
+# SEM ALTERAR A LISTA
+# =========================
+
+@bot.command()
+@commands.check(pode_usar)
+async def enviar(ctx, *, conteudo):
+
+    if "|" not in conteudo:
+        await ctx.send(
+            "⚠️ Use assim:\n"
+            "!enviar @Pessoa1 @Pessoa2 | Sua mensagem"
+        )
+        return
+
+    _, mensagem = conteudo.split("|", 1)
+    mensagem = mensagem.strip()
+
+    if not mensagem:
+        await ctx.send(
+            "⚠️ Você precisa escrever uma mensagem."
+        )
+        return
+
+    membros = ctx.message.mentions
+
+    if not membros:
+        await ctx.send(
+            "⚠️ Você precisa mencionar pelo menos uma pessoa."
+        )
+        return
+
+    membros_unicos = []
+    ids_adicionados = set()
+
+    for membro in membros:
+
+        if membro.bot:
+            continue
+
+        if membro.id not in ids_adicionados:
+            membros_unicos.append(membro)
+            ids_adicionados.add(membro.id)
+
+    if not membros_unicos:
+        await ctx.send(
+            "⚠️ Não encontrei nenhum usuário válido."
+        )
+        return
+
+    await ctx.send(
+        f"📨 Vou enviar a mensagem para "
+        f"**{len(membros_unicos)} pessoas**..."
+    )
+
+    enviados = 0
+    falharam = 0
+
+    for membro in membros_unicos:
+
+        try:
+            await membro.send(mensagem)
+            enviados += 1
+
+        except Exception as erro:
+            print(
+                f"Erro ao enviar para {membro}: {erro}"
+            )
             falharam += 1
 
     await ctx.send(
@@ -285,8 +349,7 @@ async def on_command_error(ctx, erro):
     ):
 
         await ctx.send(
-            "⚠️ Faltou alguma informação "
-            "no comando."
+            "⚠️ Faltou alguma informação no comando."
         )
 
     elif isinstance(
@@ -295,8 +358,7 @@ async def on_command_error(ctx, erro):
     ):
 
         await ctx.send(
-            "❌ Não encontrei esse usuário "
-            "no servidor."
+            "❌ Não encontrei esse usuário no servidor."
         )
 
     elif isinstance(
@@ -316,10 +378,7 @@ async def on_command_error(ctx, erro):
         return
 
     else:
-
-        print(
-            f"Erro no comando: {erro}"
-        )
+        print(f"Erro no comando: {erro}")
 
 
 # =========================
