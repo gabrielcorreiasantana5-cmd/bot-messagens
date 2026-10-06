@@ -31,6 +31,21 @@ def salvar_usuarios(usuarios):
 
 
 # -------------------------
+# PERMISSÃO
+# ADM OU CORVO AJUDANTE
+# -------------------------
+
+def pode_usar(ctx):
+    if ctx.author.guild_permissions.administrator:
+        return True
+
+    return any(
+        role.name == "Corvo Ajudante"
+        for role in ctx.author.roles
+    )
+
+
+# -------------------------
 # BOT ONLINE
 # -------------------------
 
@@ -44,14 +59,8 @@ async def on_ready():
 # -------------------------
 
 @bot.command()
-@bot.command()
-@commands.check(
-    lambda ctx: ctx.author.guild_permissions.administrator
-    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
-)
+@commands.check(pode_usar)
 async def add(ctx, membro: discord.Member):
-async def add(ctx, membro: discord.Member):
-    
 
     usuarios = carregar_usuarios()
 
@@ -62,19 +71,17 @@ async def add(ctx, membro: discord.Member):
     usuarios.append(membro.id)
     salvar_usuarios(usuarios)
 
-    await ctx.send(f"✅ {membro.mention} foi adicionado à lista.")
+    await ctx.send(
+        f"✅ {membro.mention} foi adicionado à lista."
+    )
 
 
 # -------------------------
 # REMOVER
 # -------------------------
+
 @bot.command()
-@bot.command()
-@commands.check(
-    lambda ctx: ctx.author.guild_permissions.administrator
-    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
-)
-async def add(ctx, membro: discord.Member):
+@commands.check(pode_usar)
 async def remove(ctx, membro: discord.Member):
 
     usuarios = carregar_usuarios()
@@ -86,7 +93,9 @@ async def remove(ctx, membro: discord.Member):
     usuarios.remove(membro.id)
     salvar_usuarios(usuarios)
 
-    await ctx.send(f"✅ {membro.mention} foi removido da lista.")
+    await ctx.send(
+        f"✅ {membro.mention} foi removido da lista."
+    )
 
 
 # -------------------------
@@ -94,12 +103,7 @@ async def remove(ctx, membro: discord.Member):
 # -------------------------
 
 @bot.command()
-@bot.command()
-@commands.check(
-    lambda ctx: ctx.author.guild_permissions.administrator
-    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
-)
-async def add(ctx, membro: discord.Member):
+@commands.check(pode_usar)
 async def lista(ctx):
 
     usuarios = carregar_usuarios()
@@ -116,7 +120,7 @@ async def lista(ctx):
             usuario = await bot.fetch_user(user_id)
             texto += f"{numero}. {usuario.name}\n"
 
-        except:
+        except Exception:
             texto += f"{numero}. ID: {user_id}\n"
 
     await ctx.send(texto)
@@ -127,7 +131,7 @@ async def lista(ctx):
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=False)
+@commands.check(pode_usar)
 async def avisar(ctx, *, mensagem):
 
     usuarios = carregar_usuarios()
@@ -137,7 +141,8 @@ async def avisar(ctx, *, mensagem):
         return
 
     await ctx.send(
-        f"📨 Vou enviar a mensagem para **{len(usuarios)} pessoas**..."
+        f"📨 Vou enviar a mensagem para "
+        f"**{len(usuarios)} pessoas**..."
     )
 
     enviados = 0
@@ -147,13 +152,11 @@ async def avisar(ctx, *, mensagem):
 
         try:
             usuario = await bot.fetch_user(user_id)
-
             await usuario.send(mensagem)
 
             enviados += 1
 
         except Exception as erro:
-
             print(f"Erro com {user_id}: {erro}")
             falharam += 1
 
@@ -170,14 +173,24 @@ async def avisar(ctx, *, mensagem):
 @bot.event
 async def on_command_error(ctx, erro):
 
-    if isinstance(erro, commands.MissingPermissions):
-        await ctx.send("❌ Você precisa ser administrador.")
+    if isinstance(erro, commands.CheckFailure):
+        await ctx.send(
+            "❌ Você precisa ser administrador "
+            "ou ter o cargo Corvo Ajudante."
+        )
 
     elif isinstance(erro, commands.MissingRequiredArgument):
-        await ctx.send("⚠️ Faltou alguma informação no comando.")
+        await ctx.send(
+            "⚠️ Faltou alguma informação no comando."
+        )
 
     elif isinstance(erro, commands.MemberNotFound):
-        await ctx.send("❌ Não encontrei esse usuário no servidor.")
+        await ctx.send(
+            "❌ Não encontrei esse usuário no servidor."
+        )
+
+    else:
+        print(f"Erro no comando: {erro}")
 
 
 # -------------------------
