@@ -3,26 +3,42 @@ from discord.ext import commands
 import json
 import os
 
-TOKEN = os.getenv("DISCORD_TOKEN")
 
+# =========================
+# CONFIGURAÇÕES
+# =========================
+
+TOKEN = os.getenv("DISCORD_TOKEN")
 ARQUIVO = "usuarios.json"
+
+
+# =========================
+# INTENTS
+# =========================
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
 
-# -------------------------
-# CARREGAR LISTA
-# -------------------------
+# =========================
+# CARREGAR / SALVAR LISTA
+# =========================
 
 def carregar_usuarios():
     if not os.path.exists(ARQUIVO):
         return []
 
-    with open(ARQUIVO, "r", encoding="utf-8") as arquivo:
-        return json.load(arquivo)
+    try:
+        with open(ARQUIVO, "r", encoding="utf-8") as arquivo:
+            return json.load(arquivo)
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
 def salvar_usuarios(usuarios):
@@ -30,10 +46,10 @@ def salvar_usuarios(usuarios):
         json.dump(usuarios, arquivo, indent=4)
 
 
-# -------------------------
-# PERMISSÃO
+# =========================
+# PERMISSÕES
 # ADM OU CORVO AJUDANTE
-# -------------------------
+# =========================
 
 def pode_usar(ctx):
     if ctx.author.guild_permissions.administrator:
@@ -45,18 +61,18 @@ def pode_usar(ctx):
     )
 
 
-# -------------------------
+# =========================
 # BOT ONLINE
-# -------------------------
+# =========================
 
 @bot.event
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
 
 
-# -------------------------
-# ADICIONAR
-# -------------------------
+# =========================
+# !ADD
+# =========================
 
 @bot.command()
 @commands.check(pode_usar)
@@ -65,7 +81,9 @@ async def add(ctx, membro: discord.Member):
     usuarios = carregar_usuarios()
 
     if membro.id in usuarios:
-        await ctx.send("⚠️ Essa pessoa já está na lista.")
+        await ctx.send(
+            "⚠️ Essa pessoa já está na lista."
+        )
         return
 
     usuarios.append(membro.id)
@@ -76,9 +94,9 @@ async def add(ctx, membro: discord.Member):
     )
 
 
-# -------------------------
-# REMOVER
-# -------------------------
+# =========================
+# !REMOVE
+# =========================
 
 @bot.command()
 @commands.check(pode_usar)
@@ -87,7 +105,9 @@ async def remove(ctx, membro: discord.Member):
     usuarios = carregar_usuarios()
 
     if membro.id not in usuarios:
-        await ctx.send("⚠️ Essa pessoa não está na lista.")
+        await ctx.send(
+            "⚠️ Essa pessoa não está na lista."
+        )
         return
 
     usuarios.remove(membro.id)
@@ -98,9 +118,9 @@ async def remove(ctx, membro: discord.Member):
     )
 
 
-# -------------------------
-# LISTAR
-# -------------------------
+# =========================
+# !LISTA
+# =========================
 
 @bot.command()
 @commands.check(pode_usar)
@@ -109,26 +129,39 @@ async def lista(ctx):
     usuarios = carregar_usuarios()
 
     if not usuarios:
-        await ctx.send("📋 A lista está vazia.")
+        await ctx.send(
+            "📋 A lista está vazia."
+        )
         return
 
     texto = "📋 **Pessoas cadastradas:**\n\n"
 
-    for numero, user_id in enumerate(usuarios, start=1):
+    for numero, user_id in enumerate(
+        usuarios,
+        start=1
+    ):
 
         try:
             usuario = await bot.fetch_user(user_id)
-            texto += f"{numero}. {usuario.name}\n"
+
+            texto += (
+                f"{numero}. "
+                f"{usuario.name}\n"
+            )
 
         except Exception:
-            texto += f"{numero}. ID: {user_id}\n"
+            texto += (
+                f"{numero}. "
+                f"ID: {user_id}\n"
+            )
 
     await ctx.send(texto)
 
 
-# -------------------------
-# ENVIAR MENSAGEM
-# -------------------------
+# =========================
+# !AVISAR
+# ENVIA PARA A LISTA
+# =========================
 
 @bot.command()
 @commands.check(pode_usar)
@@ -137,7 +170,9 @@ async def avisar(ctx, *, mensagem):
     usuarios = carregar_usuarios()
 
     if not usuarios:
-        await ctx.send("⚠️ Não há ninguém na lista.")
+        await ctx.send(
+            "⚠️ Não há ninguém na lista."
+        )
         return
 
     await ctx.send(
@@ -152,12 +187,18 @@ async def avisar(ctx, *, mensagem):
 
         try:
             usuario = await bot.fetch_user(user_id)
+
             await usuario.send(mensagem)
 
             enviados += 1
 
         except Exception as erro:
-            print(f"Erro com {user_id}: {erro}")
+
+            print(
+                f"Erro ao enviar para "
+                f"{user_id}: {erro}"
+            )
+
             falharam += 1
 
     await ctx.send(
@@ -166,35 +207,128 @@ async def avisar(ctx, *, mensagem):
     )
 
 
-# -------------------------
+# =========================
+# !AVISARCARGO
+# ENVIA PARA TODO O CARGO
+# =========================
+
+@bot.command()
+@commands.check(pode_usar)
+async def avisarcargo(
+    ctx,
+    cargo: discord.Role,
+    *,
+    mensagem
+):
+
+    membros = [
+        membro
+        for membro in cargo.members
+        if not membro.bot
+    ]
+
+    if not membros:
+        await ctx.send(
+            "⚠️ Não encontrei membros "
+            "com esse cargo."
+        )
+        return
+
+    await ctx.send(
+        f"📨 Vou enviar para "
+        f"**{len(membros)} pessoas** "
+        f"do cargo **{cargo.name}**..."
+    )
+
+    enviados = 0
+    falharam = 0
+
+    for membro in membros:
+
+        try:
+            await membro.send(mensagem)
+
+            enviados += 1
+
+        except Exception as erro:
+
+            print(
+                f"Erro ao enviar para "
+                f"{membro}: {erro}"
+            )
+
+            falharam += 1
+
+    await ctx.send(
+        f"✅ Enviadas: **{enviados}**\n"
+        f"❌ Falharam: **{falharam}**"
+    )
+
+
+# =========================
 # TRATAMENTO DE ERROS
-# -------------------------
+# =========================
 
 @bot.event
 async def on_command_error(ctx, erro):
 
     if isinstance(erro, commands.CheckFailure):
+
         await ctx.send(
             "❌ Você precisa ser administrador "
             "ou ter o cargo Corvo Ajudante."
         )
 
-    elif isinstance(erro, commands.MissingRequiredArgument):
+    elif isinstance(
+        erro,
+        commands.MissingRequiredArgument
+    ):
+
         await ctx.send(
-            "⚠️ Faltou alguma informação no comando."
+            "⚠️ Faltou alguma informação "
+            "no comando."
         )
 
-    elif isinstance(erro, commands.MemberNotFound):
+    elif isinstance(
+        erro,
+        commands.MemberNotFound
+    ):
+
         await ctx.send(
-            "❌ Não encontrei esse usuário no servidor."
+            "❌ Não encontrei esse usuário "
+            "no servidor."
         )
+
+    elif isinstance(
+        erro,
+        commands.RoleNotFound
+    ):
+
+        await ctx.send(
+            "❌ Não encontrei esse cargo."
+        )
+
+    elif isinstance(
+        erro,
+        commands.CommandNotFound
+    ):
+
+        return
 
     else:
-        print(f"Erro no comando: {erro}")
+
+        print(
+            f"Erro no comando: {erro}"
+        )
 
 
-# -------------------------
-# INICIAR
-# -------------------------
+# =========================
+# INICIAR BOT
+# =========================
+
+if not TOKEN:
+    raise RuntimeError(
+        "DISCORD_TOKEN não foi configurado."
+    )
 
 bot.run(TOKEN)
