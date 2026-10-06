@@ -3,7 +3,7 @@ from discord.ext import commands
 import json
 import os
 
-TOKEN = "COLOQUE_SEU_TOKEN_AQUI"
+TOKEN = ""
 
 ARQUIVO = "usuarios.json"
 
