@@ -44,7 +44,6 @@ async def on_ready():
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def add(ctx, membro: discord.Member):
 
     usuarios = carregar_usuarios()
@@ -64,7 +63,6 @@ async def add(ctx, membro: discord.Member):
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def remove(ctx, membro: discord.Member):
 
     usuarios = carregar_usuarios()
@@ -84,7 +82,6 @@ async def remove(ctx, membro: discord.Member):
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def lista(ctx):
 
     usuarios = carregar_usuarios()
@@ -112,7 +109,7 @@ async def lista(ctx):
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(administrator=False)
 async def avisar(ctx, *, mensagem):
 
     usuarios = carregar_usuarios()
