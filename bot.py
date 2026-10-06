@@ -44,7 +44,12 @@ async def on_ready():
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@bot.command()
+@commands.check(
+    lambda ctx: ctx.author.guild_permissions.administrator
+    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
+)
+async def add(ctx, membro: discord.Member):
 async def add(ctx, membro: discord.Member):
     
 
@@ -64,7 +69,12 @@ async def add(ctx, membro: discord.Member):
 # REMOVER
 # -------------------------
 @bot.command()
-@commands.has_permissions(administrator=True)
+@bot.command()
+@commands.check(
+    lambda ctx: ctx.author.guild_permissions.administrator
+    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
+)
+async def add(ctx, membro: discord.Member):
 async def remove(ctx, membro: discord.Member):
 
     usuarios = carregar_usuarios()
@@ -84,7 +94,12 @@ async def remove(ctx, membro: discord.Member):
 # -------------------------
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@bot.command()
+@commands.check(
+    lambda ctx: ctx.author.guild_permissions.administrator
+    or any(role.name == "Corvo Ajudante" for role in ctx.author.roles)
+)
+async def add(ctx, membro: discord.Member):
 async def lista(ctx):
 
     usuarios = carregar_usuarios()
