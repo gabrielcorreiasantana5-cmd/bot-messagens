@@ -35,6 +35,8 @@ def salvar_usuarios(usuarios):
 
 
 def pode_usar(ctx):
+    if ctx.guild is None:
+        return False
     if ctx.author.guild_permissions.administrator:
         return True
     return any(cargo.name == CARGO_AUTORIZADO for cargo in ctx.author.roles)
@@ -48,8 +50,13 @@ async def apagar_depois(mensagem):
     await asyncio.sleep(TEMPO_APAGAR)
     try:
         await mensagem.delete()
-    except (discord.Forbidden, discord.NotFound, discord.HTTPException) as erro:
-        print(f'N茫o foi poss铆vel apagar mensagem: {erro}')
+    except discord.NotFound:
+        pass  # A mensagem j\u00e1 foi apagada.
+    except discord.Forbidden:
+        print(f'ERRO AO APAGAR: sem permiss\u00e3o no canal #{mensagem.channel.name}. '
+              'Conceda Gerenciar mensagens ao bot nas permiss\u00f5es deste canal.')
+    except discord.HTTPException as erro:
+        print(f'ERRO AO APAGAR mensagem {mensagem.id}: {erro}')
 
 
 async def responder(ctx, texto):
@@ -59,10 +66,15 @@ async def responder(ctx, texto):
     return resposta
 
 
-@bot.before_invoke
-async def apagar_comando(ctx):
-    if canal_temporario(ctx):
-        asyncio.create_task(apagar_depois(ctx.message))
+@bot.event
+async def on_message(message):
+    # Agenda a exclus\u00e3o assim que o comando chega, inclusive em caso de erro.
+    if (message.guild is not None
+            and not message.author.bot
+            and message.channel.name == CANAL_COMANDOS
+            and message.content.startswith('!')):
+        asyncio.create_task(apagar_depois(message))
+    await bot.process_commands(message)
 
 
 async def procurar_membro(ctx, busca):
@@ -99,32 +111,36 @@ async def procurar_membro(ctx, busca):
     if len(encontrados) == 1:
         return encontrados[0]
     if len(encontrados) > 1:
-        await responder(ctx, f'鈿狅笍 Encontrei mais de uma pessoa com o nome **{busca}**.\nUse o ID da pessoa para evitar mandar para a pessoa errada.')
+        await responder(ctx, f'\u26a0\ufe0f Encontrei mais de uma pessoa com o nome **{busca}**.\n'
+                            'Use o ID da pessoa para evitar mandar para a pessoa errada.')
     return None
 
 
 async def registrar_log(ctx, comando, mensagem, destinatarios, enviados, falharam, detalhes=''):
     canal = discord.utils.get(ctx.guild.text_channels, name=CANAL_LOGS)
     if canal is None:
-        print(f'ERRO LOGS: canal #{CANAL_LOGS} n茫o encontrado no servidor {ctx.guild.name}')
+        print(f'ERRO LOGS: canal #{CANAL_LOGS} n\u00e3o encontrado no servidor {ctx.guild.name}')
         return
     momento = datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')
     cabecalho = (
-        f'馃搵 **Registro de envio 鈥� !{comando}**\n'
-        f'馃懁 Respons谩vel: {ctx.author} (ID: {ctx.author.id})\n'
-        f'馃晵 Data: {momento}\n'
-        f'馃摠 Destinat谩rios: {destinatarios}\n'
-        f'鉁� Enviadas: {enviados} | 鉂� Falharam: {falharam}\n'
+        f'\U0001f4cb **Registro de envio \u2014 !{comando}**\n'
+        f'\U0001f464 Respons\u00e1vel: {ctx.author} (ID: {ctx.author.id})\n'
+        f'\U0001f552 Data: {momento}\n'
+        f'\U0001f4e8 Destinat\u00e1rios: {destinatarios}\n'
+        f'\u2705 Enviadas: {enviados} | \u274c Falharam: {falharam}\n'
     )
     if detalhes:
-        cabecalho += f'鈩癸笍 {detalhes}\n'
-    cabecalho += '馃摑 **Mensagem enviada:**\n'
-    # Divide textos longos para respeitar o limite de 2.000 caracteres do Discord.
+        cabecalho += f'\u2139\ufe0f {detalhes}\n'
+    cabecalho += '\U0001f4dd **Mensagem enviada:**\n'
     try:
-        await canal.send(cabecalho, allowed_mentions=discord.AllowedMentions.none())
+        # Mant\u00e9m o limite de caracteres mesmo para listas de destinat\u00e1rios grandes.
+        for inicio in range(0, len(cabecalho), 1900):
+            await canal.send(cabecalho[inicio:inicio + 1900],
+                             allowed_mentions=discord.AllowedMentions.none())
         texto = mensagem or '(vazia)'
         for inicio in range(0, len(texto), 1900):
-            await canal.send(texto[inicio:inicio + 1900], allowed_mentions=discord.AllowedMentions.none())
+            await canal.send(texto[inicio:inicio + 1900],
+                             allowed_mentions=discord.AllowedMentions.none())
     except (discord.Forbidden, discord.HTTPException) as erro:
         print(f'ERRO AO ENVIAR LOG para #{CANAL_LOGS}: {erro}')
 
@@ -132,6 +148,7 @@ async def registrar_log(ctx, comando, mensagem, destinatarios, enviados, falhara
 @bot.event
 async def on_ready():
     print(f'Bot conectado como {bot.user}')
+    print(f'Apagamento ap\u00f3s {TEMPO_APAGAR}s no #{CANAL_COMANDOS}; logs no #{CANAL_LOGS}')
 
 
 @bot.command()
@@ -139,15 +156,15 @@ async def on_ready():
 async def add(ctx, *, pessoa):
     membro = await procurar_membro(ctx, pessoa)
     if not membro:
-        await responder(ctx, '鉂� N茫o encontrei essa pessoa.\nTente usar o nome exato, @men莽茫o ou ID.')
+        await responder(ctx, '\u274c N\u00e3o encontrei essa pessoa.\nTente usar o nome exato, @men\u00e7\u00e3o ou ID.')
         return
     usuarios = carregar_usuarios()
     if membro.id in usuarios:
-        await responder(ctx, f'鈿狅笍 {membro.mention} j谩 est谩 na lista.')
+        await responder(ctx, f'\u26a0\ufe0f {membro.mention} j\u00e1 est\u00e1 na lista.')
         return
     usuarios.append(membro.id)
     salvar_usuarios(usuarios)
-    await responder(ctx, f'鉁� {membro.mention} foi adicionado 脿 lista.')
+    await responder(ctx, f'\u2705 {membro.mention} foi adicionado \u00e0 lista.')
 
 
 @bot.command()
@@ -155,15 +172,15 @@ async def add(ctx, *, pessoa):
 async def remove(ctx, *, pessoa):
     membro = await procurar_membro(ctx, pessoa)
     if not membro:
-        await responder(ctx, '鉂� N茫o encontrei essa pessoa.\nTente usar o nome exato, @men莽茫o ou ID.')
+        await responder(ctx, '\u274c N\u00e3o encontrei essa pessoa.\nTente usar o nome exato, @men\u00e7\u00e3o ou ID.')
         return
     usuarios = carregar_usuarios()
     if membro.id not in usuarios:
-        await responder(ctx, f'鈿狅笍 {membro.mention} n茫o est谩 na lista.')
+        await responder(ctx, f'\u26a0\ufe0f {membro.mention} n\u00e3o est\u00e1 na lista.')
         return
     usuarios.remove(membro.id)
     salvar_usuarios(usuarios)
-    await responder(ctx, f'鉁� {membro.mention} foi removido da lista.')
+    await responder(ctx, f'\u2705 {membro.mention} foi removido da lista.')
 
 
 @bot.command()
@@ -171,9 +188,9 @@ async def remove(ctx, *, pessoa):
 async def lista(ctx):
     usuarios = carregar_usuarios()
     if not usuarios:
-        await responder(ctx, '馃搵 A lista est谩 vazia.')
+        await responder(ctx, '\U0001f4cb A lista est\u00e1 vazia.')
         return
-    texto = '馃搵 **Pessoas cadastradas:**\n\n'
+    texto = '\U0001f4cb **Pessoas cadastradas:**\n\n'
     for numero, user_id in enumerate(usuarios, start=1):
         try:
             usuario = await bot.fetch_user(user_id)
@@ -193,9 +210,9 @@ async def lista(ctx):
 async def avisar(ctx, *, mensagem):
     usuarios = carregar_usuarios()
     if not usuarios:
-        await responder(ctx, '鈿狅笍 N茫o h谩 ningu茅m na lista.')
+        await responder(ctx, '\u26a0\ufe0f N\u00e3o h\u00e1 ningu\u00e9m na lista.')
         return
-    await responder(ctx, f'馃摠 Vou enviar a mensagem para **{len(usuarios)} pessoas**...')
+    await responder(ctx, f'\U0001f4e8 Vou enviar a mensagem para **{len(usuarios)} pessoas**...')
     enviados = falharam = 0
     for user_id in usuarios:
         try:
@@ -205,8 +222,10 @@ async def avisar(ctx, *, mensagem):
         except Exception as erro:
             print(f'Erro ao enviar para {user_id}: {erro}')
             falharam += 1
-    await responder(ctx, f'鉁� Enviadas: **{enviados}**\n鉂� Falharam: **{falharam}**')
-    await registrar_log(ctx, 'avisar', mensagem, f'{len(usuarios)} pessoas da lista (IDs: {", ".join(map(str, usuarios))})', enviados, falharam)
+    await responder(ctx, f'\u2705 Enviadas: **{enviados}**\n\u274c Falharam: **{falharam}**')
+    await registrar_log(ctx, 'avisar', mensagem,
+                        f'{len(usuarios)} pessoas da lista (IDs: {", ".join(map(str, usuarios))})',
+                        enviados, falharam)
 
 
 @bot.command()
@@ -214,9 +233,9 @@ async def avisar(ctx, *, mensagem):
 async def avisarcargo(ctx, cargo: discord.Role, *, mensagem):
     membros = [membro for membro in cargo.members if not membro.bot]
     if not membros:
-        await responder(ctx, '鈿狅笍 N茫o encontrei ningu茅m com esse cargo.')
+        await responder(ctx, '\u26a0\ufe0f N\u00e3o encontrei ningu\u00e9m com esse cargo.')
         return
-    await responder(ctx, f'馃摠 Vou enviar para **{len(membros)} pessoas** do cargo **{cargo.name}**...')
+    await responder(ctx, f'\U0001f4e8 Vou enviar para **{len(membros)} pessoas** do cargo **{cargo.name}**...')
     enviados = falharam = 0
     for membro in membros:
         try:
@@ -225,24 +244,26 @@ async def avisarcargo(ctx, cargo: discord.Role, *, mensagem):
         except Exception as erro:
             print(f'Erro ao enviar para {membro}: {erro}')
             falharam += 1
-    await responder(ctx, f'鉁� Enviadas: **{enviados}**\n鉂� Falharam: **{falharam}**')
-    await registrar_log(ctx, 'avisarcargo', mensagem, f'{len(membros)} membros do cargo {cargo.name} (ID: {cargo.id})', enviados, falharam)
+    await responder(ctx, f'\u2705 Enviadas: **{enviados}**\n\u274c Falharam: **{falharam}**')
+    await registrar_log(ctx, 'avisarcargo', mensagem,
+                        f'{len(membros)} membros do cargo {cargo.name} (ID: {cargo.id})',
+                        enviados, falharam)
 
 
 @bot.command()
 @commands.check(pode_usar)
 async def enviar(ctx, *, conteudo):
     if '|' not in conteudo:
-        await responder(ctx, '鈿狅笍 Use assim:\n`!enviar Nome1, Nome2 | Mensagem`')
+        await responder(ctx, '\u26a0\ufe0f Use assim:\n`!enviar Nome1, Nome2 | Mensagem`')
         return
     parte_pessoas, mensagem = conteudo.split('|', 1)
     mensagem = mensagem.strip()
     if not mensagem:
-        await responder(ctx, '鈿狅笍 Voc锚 precisa escrever uma mensagem.')
+        await responder(ctx, '\u26a0\ufe0f Voc\u00ea precisa escrever uma mensagem.')
         return
     buscas = [item.strip() for item in parte_pessoas.split(',') if item.strip()]
     if not buscas:
-        await responder(ctx, '鈿狅笍 Informe pelo menos uma pessoa.')
+        await responder(ctx, '\u26a0\ufe0f Informe pelo menos uma pessoa.')
         return
     membros = []
     ids_adicionados = set()
@@ -258,9 +279,9 @@ async def enviar(ctx, *, conteudo):
             membros.append(membro)
             ids_adicionados.add(membro.id)
     if not membros:
-        await responder(ctx, '鉂� N茫o encontrei nenhum destinat谩rio v谩lido.')
+        await responder(ctx, '\u274c N\u00e3o encontrei nenhum destinat\u00e1rio v\u00e1lido.')
         return
-    await responder(ctx, f'馃摠 Vou enviar a mensagem para **{len(membros)} pessoas**...')
+    await responder(ctx, f'\U0001f4e8 Vou enviar a mensagem para **{len(membros)} pessoas**...')
     enviados = falharam = 0
     for membro in membros:
         try:
@@ -269,26 +290,23 @@ async def enviar(ctx, *, conteudo):
         except Exception as erro:
             print(f'Erro ao enviar para {membro}: {erro}')
             falharam += 1
-    resposta = f'鉁� Enviadas: **{enviados}**\n鉂� Falharam: **{falharam}**'
+    resposta = f'\u2705 Enviadas: **{enviados}**\n\u274c Falharam: **{falharam}**'
     if nao_encontrados:
-        resposta += '\n鈿狅笍 N茫o encontrados: ' + ', '.join(nao_encontrados)
+        resposta += '\n\u26a0\ufe0f N\u00e3o encontrados: ' + ', '.join(nao_encontrados)
     await responder(ctx, resposta)
     destinos = ', '.join(f'{membro} (ID: {membro.id})' for membro in membros)
     await registrar_log(ctx, 'enviar', mensagem, destinos, enviados, falharam,
-                       'N茫o encontrados: ' + ', '.join(nao_encontrados) if nao_encontrados else '')
+                        'N\u00e3o encontrados: ' + ', '.join(nao_encontrados) if nao_encontrados else '')
 
 
 @bot.event
 async def on_command_error(ctx, erro):
-    # before_invoke n茫o executa quando o comando falha na checagem ou no parsing.
-    if canal_temporario(ctx):
-        asyncio.create_task(apagar_depois(ctx.message))
     if isinstance(erro, commands.CheckFailure):
-        await responder(ctx, '鉂� Voc锚 precisa ser administrador ou ter o cargo Corvo Ajudante.')
+        await responder(ctx, '\u274c Voc\u00ea precisa ser administrador ou ter o cargo Corvo Ajudante.')
     elif isinstance(erro, commands.MissingRequiredArgument):
-        await responder(ctx, '鈿狅笍 Faltou alguma informa莽茫o no comando.')
+        await responder(ctx, '\u26a0\ufe0f Faltou alguma informa\u00e7\u00e3o no comando.')
     elif isinstance(erro, commands.RoleNotFound):
-        await responder(ctx, '鉂� N茫o encontrei esse cargo.')
+        await responder(ctx, '\u274c N\u00e3o encontrei esse cargo.')
     elif isinstance(erro, commands.CommandNotFound):
         return
     else:
@@ -296,5 +314,5 @@ async def on_command_error(ctx, erro):
 
 
 if not TOKEN:
-    raise RuntimeError('DISCORD_TOKEN n茫o foi configurado.')
+    raise RuntimeError('DISCORD_TOKEN n\u00e3o foi configurado.')
 bot.run(TOKEN)
